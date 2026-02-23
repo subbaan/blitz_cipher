@@ -67,6 +67,26 @@ cargo run --release
 
 Gamepad supported.
 
+## Debug Menu
+
+A hidden debug menu is accessible from the title screen via the cheat key. It includes:
+
+- **Start Stage** — jump directly to any stage (1–6)
+- **Invincible** — toggle invincibility
+- **Infinite Fuel** — toggle unlimited fuel
+- **Tuning...** — open the tuning submenu
+
+### Tuning Submenu
+
+Adjust difficulty on the fly without recompiling:
+
+| Setting | Range | Step | Default |
+|---------|-------|------|---------|
+| Enemy Density | 0.25x – 4.0x | 0.25 | 1.0x |
+| Scroll Speed | 0.25x – 4.0x | 0.25 | 1.0x |
+
+Use `←→` to adjust the selected value. A `[*]` marker appears next to **Tuning...** in the debug menu whenever either value is non-default. Tuning multipliers stack on top of the normal per-difficulty scaling.
+
 ## Version
 
-v0.1.24
+v0.1.25
