@@ -120,11 +120,11 @@ fn formation_wave_group(base_col: usize, total_len: usize) -> Vec<EnemyPlacement
     group
 }
 
-pub fn get_stage(stage_num: usize, viewport_h: usize, viewport_w: usize) -> StageDefinition {
+pub fn get_stage(stage_num: usize, viewport_h: usize, viewport_w: usize, density_override: f64, speed_override: f64) -> StageDefinition {
     let difficulty = (stage_num.saturating_sub(1)) / 6;
     let stage_idx = (stage_num.saturating_sub(1)) % 6;
-    let speed_mult = 1.0 + difficulty as f64 * 0.15;
-    let density_mult = 1.0 + difficulty as f64 * 0.3;
+    let speed_mult = (1.0 + difficulty as f64 * 0.15) * speed_override;
+    let density_mult = (1.0 + difficulty as f64 * 0.3) * density_override;
 
     // Ensure stages are always substantially longer than the viewport
     // Base lengths are designed for ~80col terminals; scale up for wider ones

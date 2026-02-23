@@ -23,6 +23,7 @@ pub enum GamePhase {
     GameOver,
     Config,    // key binding configuration modal
     CheatMenu, // debug/cheat menu for testing
+    TuningMenu, // tuning submenu from debug menu
 }
 
 pub struct ConfigState {
@@ -46,6 +47,9 @@ pub struct CheatState {
     pub start_stage: usize,   // 1-6
     pub invincible: bool,
     pub infinite_fuel: bool,
+    pub tuning_selected: usize, // cursor in tuning menu (0..2)
+    pub density_mult: f64,      // 0.25..=4.0, step 0.25, default 1.0
+    pub speed_mult: f64,        // 0.25..=4.0, step 0.25, default 1.0
 }
 
 pub struct GameState {
@@ -170,6 +174,9 @@ impl GameState {
                 start_stage: 1,
                 invincible: false,
                 infinite_fuel: false,
+                tuning_selected: 0,
+                density_mult: 1.0,
+                speed_mult: 1.0,
             },
         }
     }
@@ -235,7 +242,7 @@ impl GameState {
     }
 
     fn load_stage(&mut self) {
-        let stage_def = stages::get_stage(self.current_stage, self.camera.viewport_h, self.camera.viewport_w);
+        let stage_def = stages::get_stage(self.current_stage, self.camera.viewport_h, self.camera.viewport_w, self.cheat.density_mult, self.cheat.speed_mult);
         self.camera.scroll_speed = stage_def.scroll_speed;
 
         self.terrain = Terrain::generate_from_zones(&stage_def.zones, self.camera.viewport_h);
@@ -255,7 +262,7 @@ impl GameState {
 
     fn load_next_stage_seamless(&mut self) {
         let next_stage_num = self.current_stage + 1;
-        let stage_def = stages::get_stage(next_stage_num, self.camera.viewport_h, self.camera.viewport_w);
+        let stage_def = stages::get_stage(next_stage_num, self.camera.viewport_h, self.camera.viewport_w, self.cheat.density_mult, self.cheat.speed_mult);
 
         let next_terrain = Terrain::generate_from_zones(&stage_def.zones, self.camera.viewport_h);
         let offset = self.terrain.total_width(); // enemies get offset by current total terrain length
@@ -507,7 +514,7 @@ impl GameState {
             GamePhase::Config => {
                 self.config.blink_timer += dt;
             }
-            GamePhase::CheatMenu => {
+            GamePhase::CheatMenu | GamePhase::TuningMenu => {
                 self.title_timer += dt;
                 self.camera.advance(14.0 * dt);
             }
@@ -534,7 +541,7 @@ impl GameState {
             self.stage_boundary = next_boundary;
             self.current_stage_len = self.next_stage_len;
             // Update scroll speed for the new stage
-            let stage_def = stages::get_stage(self.current_stage, self.camera.viewport_h, self.camera.viewport_w);
+            let stage_def = stages::get_stage(self.current_stage, self.camera.viewport_h, self.camera.viewport_w, self.cheat.density_mult, self.cheat.speed_mult);
             self.camera.scroll_speed = stage_def.scroll_speed;
             self.next_stage_loaded = false;
         }
@@ -758,6 +765,7 @@ impl GameState {
             GamePhase::GameOver => self.render_game_over(stdout)?,
             GamePhase::Config => self.render_config(stdout)?,
             GamePhase::CheatMenu => self.render_cheat_menu(stdout)?,
+            GamePhase::TuningMenu => self.render_tuning_menu(stdout)?,
             _ => {}
         }
 
@@ -1588,8 +1596,8 @@ impl GameState {
         let sel_bg = Color::Rgb { r: 30, g: 30, b: 60 };
 
         let box_w = 32;
-        // title + blank + stage + invincible + inf_fuel + blank + help + start + bottom = 11
-        let box_h = 11;
+        // title + blank + stage + invincible + inf_fuel + tuning + blank + help + close + bottom = 12
+        let box_h = 12;
         let start_y = cy.saturating_sub(box_h / 2);
         let start_x = cx.saturating_sub(box_w / 2);
 
@@ -1611,11 +1619,15 @@ impl GameState {
             style::SetForegroundColor(normal_color), style::SetBackgroundColor(bg),
             style::Print(&blank))?;
 
-        // Menu items
+        // Tuning marker: show [*] if either mult != 1.0
+        let tuning_marker = if (self.cheat.density_mult - 1.0).abs() > 0.001 || (self.cheat.speed_mult - 1.0).abs() > 0.001 { " [*]" } else { "" };
+
+        // Menu items: (label, is_on)
         let items: Vec<(String, bool)> = vec![
             (format!("Start Stage:  < {} >", self.cheat.start_stage), false),
             (format!("Invincible:   {}", if self.cheat.invincible { "ON" } else { "OFF" }), self.cheat.invincible),
             (format!("Infinite Fuel:{}", if self.cheat.infinite_fuel { " ON" } else { " OFF" }), self.cheat.infinite_fuel),
+            (format!("Tuning...{}", tuning_marker), false),
             (">>> LAUNCH <<<".to_string(), false),
         ];
 
@@ -1640,26 +1652,26 @@ impl GameState {
         }
 
         // Blank
-        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 7) as u16),
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 8) as u16),
             style::SetForegroundColor(normal_color), style::SetBackgroundColor(bg),
             style::Print(&blank))?;
 
         // Help
         let dim_color = Color::Rgb { r: 100, g: 100, b: 120 };
         let help = format!("\u{2551}{:^width$}\u{2551}", "\u{2191}\u{2193}:Select  \u{2190}\u{2192}/Enter:Change", width = box_w - 2);
-        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 8) as u16),
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 9) as u16),
             style::SetForegroundColor(dim_color), style::SetBackgroundColor(bg),
             style::Print(&help))?;
 
         // Close
         let close = format!("\u{2551}{:^width$}\u{2551}", "Esc:Close", width = box_w - 2);
-        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 9) as u16),
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 10) as u16),
             style::SetForegroundColor(dim_color), style::SetBackgroundColor(bg),
             style::Print(&close))?;
 
         // Bottom border
         let bottom = format!("\u{255a}{}\u{255d}", "\u{2550}".repeat(box_w - 2));
-        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 10) as u16),
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 11) as u16),
             style::SetForegroundColor(normal_color), style::SetBackgroundColor(bg),
             style::Print(&bottom))?;
 
@@ -1674,11 +1686,11 @@ impl GameState {
                     if self.cheat.selected > 0 {
                         self.cheat.selected -= 1;
                     } else {
-                        self.cheat.selected = 3;
+                        self.cheat.selected = 4;
                     }
                 }
                 crossterm::event::KeyCode::Down => {
-                    if self.cheat.selected < 3 {
+                    if self.cheat.selected < 4 {
                         self.cheat.selected += 1;
                     } else {
                         self.cheat.selected = 0;
@@ -1699,7 +1711,11 @@ impl GameState {
                         0 => {} // stage select — use left/right
                         1 => self.cheat.invincible = !self.cheat.invincible,
                         2 => self.cheat.infinite_fuel = !self.cheat.infinite_fuel,
-                        3 => return Some(self.cheat.start_stage), // launch
+                        3 => {
+                            self.phase = GamePhase::TuningMenu;
+                            self.cheat.tuning_selected = 0;
+                        }
+                        4 => return Some(self.cheat.start_stage), // launch
                         _ => {}
                     }
                 }
@@ -1710,6 +1726,142 @@ impl GameState {
             }
         }
         None
+    }
+
+    fn render_tuning_menu(&self, stdout: &mut io::BufWriter<io::Stdout>) -> io::Result<()> {
+        use crossterm::{cursor, style, queue};
+
+        let cx = self.term_width / 2;
+        let cy = self.term_height / 2;
+
+        let title_color = Color::Rgb { r: 255, g: 100, b: 100 };
+        let normal_color = Color::Rgb { r: 180, g: 180, b: 200 };
+        let selected_color = Color::Rgb { r: 255, g: 255, b: 100 };
+        let active_color = Color::Rgb { r: 100, g: 255, b: 200 };
+        let dim_color = Color::Rgb { r: 100, g: 100, b: 120 };
+        let bg = Color::Rgb { r: 10, g: 10, b: 30 };
+        let sel_bg = Color::Rgb { r: 30, g: 30, b: 60 };
+
+        let box_w = 34;
+        let box_h = 10;
+        let start_y = cy.saturating_sub(box_h / 2);
+        let start_x = cx.saturating_sub(box_w / 2);
+
+        // Top border
+        let top = format!("\u{2554}{}\u{2557}", "\u{2550}".repeat(box_w - 2));
+        queue!(stdout, cursor::MoveTo(start_x as u16, start_y as u16),
+            style::SetForegroundColor(title_color), style::SetBackgroundColor(bg),
+            style::Print(&top))?;
+
+        // Title
+        let title_line = format!("\u{2551}{:^width$}\u{2551}", "TUNING MENU", width = box_w - 2);
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 1) as u16),
+            style::SetForegroundColor(title_color), style::SetBackgroundColor(bg),
+            style::Print(&title_line))?;
+
+        // Blank
+        let blank = format!("\u{2551}{:^width$}\u{2551}", "", width = box_w - 2);
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 2) as u16),
+            style::SetForegroundColor(normal_color), style::SetBackgroundColor(bg),
+            style::Print(&blank))?;
+
+        // Tuning rows
+        let rows: &[(&str, f64)] = &[
+            ("Enemy Density", self.cheat.density_mult),
+            ("Scroll Speed", self.cheat.speed_mult),
+        ];
+
+        for (i, (label, val)) in rows.iter().enumerate() {
+            let y = start_y + 3 + i;
+            let is_selected = i == self.cheat.tuning_selected;
+            let prefix = if is_selected { ">" } else { " " };
+            let val_str = format!("< {:.2}x >", val);
+            let item_str = format!("{:<16}{:>9}", label, val_str);
+            let content = format!(" {} {:<width$}", prefix, item_str, width = box_w - 5);
+            let line = format!("\u{2551}{:<width$}\u{2551}", content, width = box_w - 2);
+
+            let is_active = (val - 1.0).abs() > 0.001;
+            let (fg, row_bg) = if is_selected {
+                (selected_color, sel_bg)
+            } else if is_active {
+                (active_color, bg)
+            } else {
+                (normal_color, bg)
+            };
+
+            queue!(stdout, cursor::MoveTo(start_x as u16, y as u16),
+                style::SetForegroundColor(fg), style::SetBackgroundColor(row_bg),
+                style::Print(&line))?;
+        }
+
+        // Blank
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 5) as u16),
+            style::SetForegroundColor(normal_color), style::SetBackgroundColor(bg),
+            style::Print(&blank))?;
+
+        // Help
+        let help = format!("\u{2551}{:^width$}\u{2551}", "\u{2191}\u{2193}:Select  \u{2190}\u{2192}:Change", width = box_w - 2);
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 6) as u16),
+            style::SetForegroundColor(dim_color), style::SetBackgroundColor(bg),
+            style::Print(&help))?;
+
+        // Esc back
+        let back = format!("\u{2551}{:^width$}\u{2551}", "Esc: Back", width = box_w - 2);
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 7) as u16),
+            style::SetForegroundColor(dim_color), style::SetBackgroundColor(bg),
+            style::Print(&back))?;
+
+        // Blank
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 8) as u16),
+            style::SetForegroundColor(normal_color), style::SetBackgroundColor(bg),
+            style::Print(&blank))?;
+
+        // Bottom border
+        let bottom = format!("\u{255a}{}\u{255d}", "\u{2550}".repeat(box_w - 2));
+        queue!(stdout, cursor::MoveTo(start_x as u16, (start_y + 9) as u16),
+            style::SetForegroundColor(normal_color), style::SetBackgroundColor(bg),
+            style::Print(&bottom))?;
+
+        Ok(())
+    }
+
+    pub fn update_tuning_menu(&mut self, input: &InputState) {
+        if let Some(key) = input.last_raw_key {
+            match key {
+                crossterm::event::KeyCode::Up => {
+                    if self.cheat.tuning_selected > 0 {
+                        self.cheat.tuning_selected -= 1;
+                    } else {
+                        self.cheat.tuning_selected = 1;
+                    }
+                }
+                crossterm::event::KeyCode::Down => {
+                    if self.cheat.tuning_selected < 1 {
+                        self.cheat.tuning_selected += 1;
+                    } else {
+                        self.cheat.tuning_selected = 0;
+                    }
+                }
+                crossterm::event::KeyCode::Left => {
+                    if self.cheat.tuning_selected == 0 {
+                        self.cheat.density_mult = (self.cheat.density_mult - 0.25).max(0.25);
+                    } else {
+                        self.cheat.speed_mult = (self.cheat.speed_mult - 0.25).max(0.25);
+                    }
+                }
+                crossterm::event::KeyCode::Right => {
+                    if self.cheat.tuning_selected == 0 {
+                        self.cheat.density_mult = (self.cheat.density_mult + 0.25).min(4.0);
+                    } else {
+                        self.cheat.speed_mult = (self.cheat.speed_mult + 0.25).min(4.0);
+                    }
+                }
+                crossterm::event::KeyCode::Esc => {
+                    self.phase = GamePhase::CheatMenu;
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Handle input while in Config phase. Returns true if should exit config.
