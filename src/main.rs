@@ -135,6 +135,18 @@ fn main() -> io::Result<()> {
             continue;
         }
 
+        // Tuning submenu phase
+        if game.phase == GamePhase::TuningMenu {
+            game.update_tuning_menu(&input);
+            game.update(dt, &input);
+            game.render(&mut stdout)?;
+            let elapsed = frame_start.elapsed();
+            if elapsed < FRAME_DURATION {
+                std::thread::sleep(FRAME_DURATION - elapsed);
+            }
+            continue;
+        }
+
         // Debug/cheat menu can be opened from Title
         if input.cheat_toggle && game.phase == GamePhase::Title {
             game.cheat.selected = 0;
