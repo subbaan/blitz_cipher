@@ -1,7 +1,7 @@
 use crossterm::{cursor, style, queue};
 use std::io;
 
-pub const VERSION: &str = "v0.1.24";
+pub const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 
 pub struct Hud {
     pub score: u32,

@@ -89,4 +89,8 @@ Use `←→` to adjust the selected value. A `[*]` marker appears next to **Tuni
 
 ## Version
 
-v0.1.25
+v0.1.26
+
+## License
+
+MIT — see [LICENSE](LICENSE).

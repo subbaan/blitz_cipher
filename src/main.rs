@@ -29,6 +29,29 @@ const TARGET_FPS: f64 = 30.0;
 const FRAME_DURATION: Duration = Duration::from_nanos((1_000_000_000.0 / TARGET_FPS) as u64);
 
 fn main() -> io::Result<()> {
+    // Command-line flags
+    for arg in std::env::args().skip(1) {
+        match arg.as_str() {
+            "-h" | "--help" => {
+                println!("Blitz Cipher {} — retro terminal shoot-em-up\n", hud::VERSION);
+                println!("Usage: blitz_cipher [OPTIONS]\n");
+                println!("Options:");
+                println!("  -h, --help     Print this help and exit");
+                println!("  -V, --version  Print version and exit\n");
+                println!("Controls: arrows/WASD move, Space/Z fire, C config, Esc quit");
+                return Ok(());
+            }
+            "-V" | "--version" => {
+                println!("blitz_cipher {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
+            _ => {
+                eprintln!("blitz_cipher: unknown option '{}' (try --help)", arg);
+                std::process::exit(2);
+            }
+        }
+    }
+
     // Terminal setup
     terminal::enable_raw_mode()?;
     let mut stdout = io::BufWriter::new(io::stdout());
